@@ -1,0 +1,8 @@
+{
+  "name": "effect-sharding-refresh-race",
+  "private": true,
+  "scripts": {
+    "stock": "pnpm --dir stock install && pnpm --dir stock test",
+    "fixed": "pnpm --dir fixed install && pnpm --dir fixed test"
+  }
+}

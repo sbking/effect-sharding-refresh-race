@@ -1,0 +1,89 @@
+diff --git a/dist/cluster/Sharding.js b/dist/cluster/Sharding.js
+index 104c1515b729083d88412e98d7b02fbfdbcd3202..29c1da20ed71a91bdd76a551ca4d38e951f9467a 100644
+--- a/dist/cluster/Sharding.js
++++ b/dist/cluster/Sharding.js
+@@ -325,9 +325,13 @@ const make = /*#__PURE__*/Effect.gen(function* () {
+       activeShardsLatch.openUnsafe();
+       return Effect.logInfo("Shard lock storage has recovered");
+     });
+-    const refreshShardLocks = Effect.suspend(() => runnerStorage.refresh(selfAddress, [...acquiredShards, ...releasingShards])).pipe(Effect.flatMap(acquired => {
+-      for (const shardId of acquiredShards) {
+-        if (!acquired.includes(shardId)) {
++    const refreshShardLocks = Effect.gen(function* () {
++      const refreshed = [...acquiredShards, ...releasingShards];
++      const acquired = yield* runnerStorage.refresh(selfAddress, refreshed);
++      // A shard acquired while this refresh is in flight was not requested, so
++      // only the refreshed shards can be reported as lost.
++      for (const shardId of refreshed) {
++        if (MutableHashSet.has(acquiredShards, shardId) && !acquired.includes(shardId)) {
+           MutableHashSet.remove(acquiredShards, shardId);
+           MutableHashSet.add(releasingShards, shardId);
+         }
+@@ -339,8 +343,10 @@ const make = /*#__PURE__*/Effect.gen(function* () {
+           MutableHashSet.add(releasingShards, shardId);
+         }
+       }
+-      return MutableHashSet.size(releasingShards) > 0 ? activeShardsLatch.open : Effect.void;
+-    }), Effect.retry({
++      if (MutableHashSet.size(releasingShards) > 0) {
++        yield* activeShardsLatch.open;
++      }
++    }).pipe(Effect.retry({
+       times: 5,
+       schedule: Schedule.spaced(50)
+     }), Effect.timeout(shardLockInterval), Effect.catchCause(markShardLocksUnhealthy));
+diff --git a/src/cluster/Sharding.ts b/src/cluster/Sharding.ts
+index 740f7fbddd4e2494311d9dc7da3fcb14d4f70f04..7faea1871f8e5ca61cb12acbe5368b78a1da14a5 100644
+--- a/src/cluster/Sharding.ts
++++ b/src/cluster/Sharding.ts
+@@ -549,30 +549,28 @@ const make = Effect.gen(function*() {
+       return Effect.logInfo("Shard lock storage has recovered")
+     })
+ 
+-    const refreshShardLocks = Effect.suspend(() =>
+-      runnerStorage.refresh(selfAddress, [
+-        ...acquiredShards,
+-        ...releasingShards
+-      ])
+-    ).pipe(
+-      Effect.flatMap((acquired) => {
+-        for (const shardId of acquiredShards) {
+-          if (!acquired.includes(shardId)) {
+-            MutableHashSet.remove(acquiredShards, shardId)
+-            MutableHashSet.add(releasingShards, shardId)
+-          }
++    const refreshShardLocks = Effect.gen(function*() {
++      const refreshed = [...acquiredShards, ...releasingShards]
++      const acquired = yield* runnerStorage.refresh(selfAddress, refreshed)
++      // A shard acquired while this refresh is in flight was not requested, so
++      // only the refreshed shards can be reported as lost.
++      for (const shardId of refreshed) {
++        if (MutableHashSet.has(acquiredShards, shardId) && !acquired.includes(shardId)) {
++          MutableHashSet.remove(acquiredShards, shardId)
++          MutableHashSet.add(releasingShards, shardId)
+         }
+-        for (let i = 0; i < acquired.length; i++) {
+-          const shardId = acquired[i]
+-          if (!MutableHashSet.has(selfShards, shardId)) {
+-            MutableHashSet.remove(acquiredShards, shardId)
+-            MutableHashSet.add(releasingShards, shardId)
+-          }
++      }
++      for (let i = 0; i < acquired.length; i++) {
++        const shardId = acquired[i]
++        if (!MutableHashSet.has(selfShards, shardId)) {
++          MutableHashSet.remove(acquiredShards, shardId)
++          MutableHashSet.add(releasingShards, shardId)
+         }
+-        return MutableHashSet.size(releasingShards) > 0
+-          ? activeShardsLatch.open
+-          : Effect.void
+-      }),
++      }
++      if (MutableHashSet.size(releasingShards) > 0) {
++        yield* activeShardsLatch.open
++      }
++    }).pipe(
+       Effect.retry({
+         times: 5,
+         schedule: Schedule.spaced(50)

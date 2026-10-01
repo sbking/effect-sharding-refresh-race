@@ -1,0 +1,8 @@
+minimumReleaseAgeExclude:
+  - '@effect/vitest@4.0.0'
+  - '@vitest/mocker@5.0.3'
+  - '@vitest/spy@5.0.3'
+  - effect@4.0.0
+  - vitest@5.0.3
+patchedDependencies:
+  effect@4.0.0: patches/effect@4.0.0.patch
