@@ -30,11 +30,11 @@ it.live("keeps shards acquired while a lock refresh is in flight", () =>
         Effect.gen(function*() {
           const ids = Array.from(shardIds)
           if (!(yield* Deferred.isDone(acquireDone))) {
-            yield* Deferred.succeed(acquireStarted, undefined)
+            yield* Deferred.succeed(acquireStarted, void 0)
             yield* Deferred.await(refreshStarted)
           }
           for (const id of ids) held.add(id.toString())
-          yield* Deferred.succeed(acquireDone, undefined)
+          yield* Deferred.succeed(acquireDone, void 0)
           return ids
         }),
       // That refresh answers only after the acquisition has completed.
@@ -42,7 +42,7 @@ it.live("keeps shards acquired while a lock refresh is in flight", () =>
         Effect.gen(function*() {
           const ids = Array.from(shardIds)
           if ((yield* Deferred.isDone(acquireStarted)) && !(yield* Deferred.isDone(acquireDone))) {
-            yield* Deferred.succeed(refreshStarted, undefined)
+            yield* Deferred.succeed(refreshStarted, void 0)
             yield* Deferred.await(acquireDone)
           }
           return ids.filter((id) => held.has(id.toString()))
